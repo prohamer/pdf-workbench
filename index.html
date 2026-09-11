@@ -47,6 +47,9 @@
   .menu.show{display:block}
   .menu button{display:block;width:100%;text-align:left;border:none;background:transparent;padding:9px 11px;border-radius:7px;font-size:13px;color:var(--ink)}
   .menu button:hover{background:var(--accent-soft)}
+  .menu .menurow{display:flex;align-items:center;gap:6px;padding:7px 11px;font-size:13px;color:var(--ink)}
+  .menu .menurow input{width:52px;border:1px solid var(--line-strong);border-radius:6px;padding:4px 6px;font-size:13px;font-family:var(--sans)}
+  .menu .menurow button{width:auto;display:inline-block;padding:5px 10px;background:var(--accent-soft);color:var(--accent-ink);font-weight:550}
   .btn.icon{padding:8px}
   .btn:disabled{opacity:.42;cursor:not-allowed}
 
@@ -182,7 +185,7 @@
       <div class="tag">local · 純本機處理，不上傳</div>
     </div>
     <div class="tools">
-      <button class="btn" id="btnOpen" title="開啟或加入 PDF（可多選，即為合併）">
+      <button class="btn" id="btnOpen" title="開啟或加入 PDF（有頁面時可選插入位置）">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>開啟 / 加入 PDF</button>
       <button class="btn" id="btnBlank" disabled title="在目前頁面後插入一張空白頁">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>插入空白頁</button>
@@ -369,6 +372,13 @@
     <button data-pos="end">插入到文件最後</button>
   </div>
 
+  <div class="menu" id="openMenu">
+    <button data-mode="start">插入到文件最前</button>
+    <button data-mode="after">插入到本頁之後</button>
+    <div class="menurow">插入到第 <input type="number" id="openAfterN" min="1" value="1"> 頁後 <button id="openAfterGo">確定</button></div>
+    <button data-mode="end">插入到文件最後</button>
+  </div>
+
   <div class="fileveil"><span>放開以加入 PDF</span></div>
   <div class="toast" id="toast"></div>
   <input type="file" id="file" accept="application/pdf,.pdf" multiple hidden>
@@ -447,21 +457,34 @@
     const docId="d"+(docN++); docs.set(docId,{name,bytes,doc,pageCount:doc.numPages});
     return {docId,doc};
   }
-  async function loadFiles(fileList){
+  function insertIndexFor(mode, page){
+    if(mode==="start") return 0;
+    if(mode==="end") return pages.length;
+    if(mode==="afterPage"){ const n=Math.max(1,Math.min(pages.length, page||pages.length)); return n; }
+    if(currentUid){ const i=pages.findIndex(p=>p.uid===currentUid); return i>=0?i+1:pages.length; }
+    return pages.length;
+  }
+  async function loadFiles(fileList, insert){
+    insert = insert || {mode:"end"};
     const files=[...fileList].filter(f=>/pdf$/i.test(f.name)||f.type==="application/pdf");
     if(!files.length){ toast("請選擇 PDF 檔",true); return; }
-    busy(true); let added=0;
+    busy(true); let added=0; const newPages=[];
     for(const f of files){
       try{
         const bytes=new Uint8Array(await f.arrayBuffer());
         const {docId,doc}=await registerDoc(f.name,bytes);
-        for(let i=0;i<doc.numPages;i++) pages.push({uid:"p"+(uidN++),docId,srcIndex:i,rotation:0});
+        for(let i=0;i<doc.numPages;i++) newPages.push({uid:"p"+(uidN++),docId,srcIndex:i,rotation:0});
         added++;
       }catch(e){ console.error(e); toast("無法讀取「"+f.name+"」，可能已加密或損毀",true); }
     }
-    if(added && !currentUid) currentUid=pages[0]?.uid??null;
-    busy(false); renderThumbs(); renderMain(); updateUI();
-    if(added){ commit(); toast("已加入 "+added+" 個檔案，共 "+pages.length+" 頁"); }
+    if(newPages.length){
+      const idx=insertIndexFor(insert.mode, insert.page);
+      pages.splice(idx,0,...newPages);
+      currentUid=newPages[0].uid;
+    }
+    busy(false); renderThumbs(); renderMain(); markCurrent(); updateUI();
+    if(added){ commit(); toast("已加入 "+added+" 個檔案（"+newPages.length+" 頁），共 "+pages.length+" 頁");
+      const node=els.thumbs.querySelector('.thumb[data-uid="'+currentUid+'"]'); if(node)node.scrollIntoView({block:"nearest"}); }
   }
   async function insertBlank(position){
     position=position||"after";
@@ -1000,9 +1023,27 @@
   }
 
   // ---------- events ----------
-  $("btnOpen").onclick=()=>els.file.click();
-  $("btnOpen2").onclick=()=>els.file.click();
-  els.file.onchange=e=>{ loadFiles(e.target.files); els.file.value=""; };
+  let pendingInsert={mode:"end"};
+  els.file.onchange=e=>{ const ins=pendingInsert; pendingInsert={mode:"end"}; loadFiles(e.target.files, ins); els.file.value=""; };
+  const openMenu=$("openMenu");
+  function showOpenMenu(){
+    const r=els.btnOpen.getBoundingClientRect();
+    openMenu.style.left=r.left+"px"; openMenu.style.top=(r.bottom+6)+"px";
+    const cur=currentUid?pages.findIndex(p=>p.uid===currentUid)+1:pages.length;
+    $("openAfterN").value=Math.max(1,cur); $("openAfterN").max=pages.length;
+    openMenu.classList.add("show");
+  }
+  function hideOpenMenu(){ openMenu.classList.remove("show"); }
+  function chooseInsert(mode,page){ pendingInsert={mode,page}; hideOpenMenu(); els.file.click(); }
+  $("btnOpen").onclick=e=>{ e.stopPropagation();
+    if(!pages.length){ pendingInsert={mode:"end"}; els.file.click(); return; }
+    if(openMenu.classList.contains("show"))hideOpenMenu(); else showOpenMenu();
+  };
+  $("btnOpen2").onclick=()=>{ pendingInsert={mode:"end"}; els.file.click(); };
+  openMenu.querySelectorAll("button[data-mode]").forEach(b=>b.addEventListener("click",()=>chooseInsert(b.dataset.mode)));
+  $("openAfterGo").onclick=()=>chooseInsert("afterPage", parseInt($("openAfterN").value,10)||pages.length);
+  $("openAfterN").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("openAfterGo").click(); } });
+
   const blankMenu=$("blankMenu");
   function showBlankMenu(){
     const r=els.btnBlank.getBoundingClientRect();
@@ -1012,7 +1053,10 @@
   function hideBlankMenu(){ blankMenu.classList.remove("show"); }
   els.btnBlank.onclick=e=>{ e.stopPropagation(); if(blankMenu.classList.contains("show"))hideBlankMenu(); else showBlankMenu(); };
   blankMenu.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ hideBlankMenu(); insertBlank(b.dataset.pos); }));
-  document.addEventListener("click",e=>{ if(!blankMenu.contains(e.target)&&e.target!==els.btnBlank) hideBlankMenu(); });
+  document.addEventListener("click",e=>{
+    if(!blankMenu.contains(e.target)&&e.target!==els.btnBlank) hideBlankMenu();
+    if(!openMenu.contains(e.target)&&e.target!==els.btnOpen) hideOpenMenu();
+  });
 
   els.btnPnum.onclick=openPnModal;
   $("btnNup").onclick=openNupModal;
@@ -1046,6 +1090,7 @@
   document.addEventListener("keydown",e=>{
     if(/input|textarea|select/i.test(e.target.tagName))return;
     if(blankMenu.classList.contains("show")){ if(e.key==="Escape")hideBlankMenu(); }
+    if(openMenu.classList.contains("show")){ if(e.key==="Escape")hideOpenMenu(); }
     if(els.pnModal.classList.contains("show")){ if(e.key==="Escape")closePnModal(); return; }
     if($("nupModal").classList.contains("show")){ if(e.key==="Escape")closeNupModal(); return; }
     if(e.key==="ArrowDown"||e.key==="ArrowRight"){e.preventDefault();stepPage(1);}
