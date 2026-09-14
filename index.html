@@ -193,6 +193,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16M18 4v16M6 20h4"/><path d="M15 14a2 2 0 1 1 3 1.7L15 20h4"/></svg>頁碼</button>
       <button class="btn" id="btnNup" disabled title="版面合併 / N-up（例如 2 張 A4 → 1 張 A3）">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/></svg>版面合併</button>
+      <button class="btn" id="btnCmp" disabled title="壓縮 / 縮小檔案（適合掃描或圖片型 PDF）">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4M8 12h8"/></svg>壓縮</button>
       <button class="btn" id="btnExtract" disabled title="把勾選的頁面另存成新的 PDF 下載">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>下載所選</button>
       <button class="btn" id="btnPng" disabled title="把勾選（或目前）頁面匯出成 PNG 圖片">
@@ -278,7 +280,7 @@
       <p>把 PDF 檔拖曳到這裡，或點下方按鈕開啟。<br>選多個檔案即會依序合併。所有處理都在你的瀏覽器完成。</p>
       <button class="btn primary" id="btnOpen2" style="margin:0 auto">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>選擇 PDF 檔</button>
-      <div class="hint">合併 · 排序 · 旋轉 · 刪除 · 空白頁 · 頁碼 · 版面合併 · 簽名標註 · 匯出 PNG</div>
+      <div class="hint">合併 · 排序 · 旋轉 · 刪除 · 空白頁 · 頁碼 · 版面合併 · 壓縮 · 簽名標註 · 匯出 PNG</div>
     </div>
   </div>
 
@@ -362,6 +364,33 @@
       <footer>
         <button class="btn ghost" id="nuLoad">載入到工作區</button>
         <button class="btn primary" id="nuDownload">產生並下載</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- compress modal -->
+  <div class="modal" id="cmpModal">
+    <div class="sheet">
+      <header>壓縮 PDF（縮小檔案） <button class="x" id="cmpClose">&times;</button></header>
+      <div class="body">
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.5;background:#fff7ed;border:1px solid #fde3c4;border-radius:8px;padding:9px 11px">
+          適合掃描檔或圖片多的 PDF。純文字型 PDF 可能反而變大，且文字會變成圖片、無法再選取。
+        </div>
+        <div class="frow"><label>解析度</label>
+          <select id="cmpDpi"><option value="100">100 DPI（最小）</option><option value="150" selected>150 DPI（建議）</option><option value="200">200 DPI（較清晰）</option></select>
+        </div>
+        <div class="frow"><label>影像品質</label>
+          <select id="cmpQ"><option value="0.5">低</option><option value="0.7" selected>中</option><option value="0.85">高</option></select>
+        </div>
+        <label class="chkrow"><input type="checkbox" id="cmpGray"> 轉為灰階（掃描文件可再省空間）</label>
+        <div class="frow"><label>範圍</label>
+          <select id="cmpScope"><option value="all" selected>全部頁面</option><option value="selected">僅勾選頁面</option></select>
+        </div>
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.5;background:#f6f7fa;border-radius:8px;padding:9px 11px" id="cmpDesc">—</div>
+      </div>
+      <footer>
+        <button class="btn ghost" id="cmpLoad">載入到工作區</button>
+        <button class="btn primary" id="cmpDownload">產生並下載</button>
       </footer>
     </div>
   </div>
@@ -450,6 +479,7 @@
     else{els.busy.style.width="100%";setTimeout(()=>{els.busy.classList.remove("on");els.busy.style.width="0";},220);} }
   function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
   function dataURLtoBytes(u){ const b=atob(u.split(",")[1]); const a=new Uint8Array(b.length); for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i); return a; }
+  function fmtBytes(n){ if(n<1024)return n+" B"; if(n<1048576)return (n/1024).toFixed(0)+" KB"; return (n/1048576).toFixed(2)+" MB"; }
 
   // ---------- load ----------
   async function registerDoc(name, bytes){
@@ -853,6 +883,7 @@
     els.btnBlank.disabled=false; // 空白頁隨時可插入（無頁面時建立 A4）
     els.btnPnum.disabled=!has;
     $("btnNup").disabled=!has;
+    $("btnCmp").disabled=!has;
     els.btnExtract.disabled=!sel; els.btnPng.disabled=!act;
     els.btnRotL.disabled=!act; els.btnRotR.disabled=!act; els.btnDel.disabled=!act;
     els.selAll.checked=has&&sel===pages.length; els.selAll.indeterminate=sel>0&&sel<pages.length;
@@ -1002,8 +1033,8 @@
     }
     return out.save();
   }
-  async function loadImposed(bytes){
-    const {docId,doc}=await registerDoc("N-up 合併",bytes);
+  async function loadImposed(bytes, name){
+    const {docId,doc}=await registerDoc(name||"N-up 合併",bytes);
     pages=[]; ann.clear(); selected.clear(); drawing=null; erasing=false; thumbCache.clear();
     for(let i=0;i<doc.numPages;i++) pages.push({uid:"p"+(uidN++),docId,srcIndex:i,rotation:0});
     currentUid=pages[0]?.uid??null; document.body.classList.add("has-pages");
@@ -1020,6 +1051,52 @@
     const cfg=readNup(); busy(true);
     try{ const bytes=await buildNup(cfg); await loadImposed(bytes); closeNupModal(); toast("已載入合併結果，可直接預覽或下載"); }
     catch(e){ console.error(e); toast("合併失敗："+(e.message||"未知錯誤"),true); } finally{ busy(false); }
+  }
+
+  // ---------- compress ----------
+  function readCmp(){ return { dpi:parseInt($("cmpDpi").value,10), quality:parseFloat($("cmpQ").value), gray:$("cmpGray").checked, scope:$("cmpScope").value }; }
+  function cmpList(cfg){ return cfg.scope==="selected"?pages.filter(p=>selected.has(p.uid)):pages.slice(); }
+  function refSizeOf(list){ const used=new Set(list.map(p=>p.docId)); let s=0; used.forEach(d=>{ const doc=docs.get(d); if(doc)s+=doc.bytes.length; }); return s; }
+  function toGray(canvas){ const c=document.createElement("canvas"); c.width=canvas.width; c.height=canvas.height; const x=c.getContext("2d"); x.filter="grayscale(1)"; x.drawImage(canvas,0,0); return c; }
+  function updateCmpDesc(){
+    const cfg=readCmp(); const list=cmpList(cfg);
+    $("cmpDesc").textContent = list.length
+      ? "將處理 "+list.length+" 頁（原始約 "+fmtBytes(refSizeOf(list))+"）。完成後會顯示壓縮結果大小。"
+      : (cfg.scope==="selected"?"尚未勾選任何頁面。":"尚無頁面。");
+  }
+  async function buildCompressed(cfg, list){
+    if(!list.length) throw new Error("沒有可壓縮的頁面");
+    const out=await PDFDocument.create();
+    for(const p of list){
+      const {wpt,hpt}=await pagePointSize(p);
+      let canvas=await renderStatic(p, Math.max(1,Math.round(wpt/72*cfg.dpi)));
+      if(cfg.gray) canvas=toGray(canvas);
+      const img=await out.embedJpg(dataURLtoBytes(canvas.toDataURL("image/jpeg", cfg.quality)));
+      const page=out.addPage([wpt,hpt]);
+      page.drawImage(img,{x:0,y:0,width:wpt,height:hpt});
+    }
+    return out.save();
+  }
+  function reportCmp(before, after){
+    if(after<before){ const pct=before?Math.round((1-after/before)*100):0;
+      toast("壓縮完成：約 "+fmtBytes(before)+" → "+fmtBytes(after)+"（縮小 "+pct+"%）"); }
+    else toast("已產生：約 "+fmtBytes(before)+" → "+fmtBytes(after)+"，此檔未變小（多為文字型 PDF）；若不需要可改用一般下載。",true);
+  }
+  function openCmpModal(){ updateCmpDesc(); $("cmpModal").classList.add("show"); }
+  function closeCmpModal(){ $("cmpModal").classList.remove("show"); }
+  async function cmpDownload(){
+    const cfg=readCmp(); const list=cmpList(cfg);
+    if(!list.length){ toast(cfg.scope==="selected"?"請先勾選頁面":"尚無頁面",true); return; }
+    busy(true);
+    try{ const ref=refSizeOf(list); const bytes=await buildCompressed(cfg,list); saveBlob(bytes,"compressed.pdf","application/pdf"); closeCmpModal(); reportCmp(ref,bytes.length); }
+    catch(e){ console.error(e); toast("壓縮失敗："+(e.message||"未知錯誤"),true); } finally{ busy(false); }
+  }
+  async function cmpLoad(){
+    const cfg=readCmp(); const list=cmpList(cfg);
+    if(!list.length){ toast(cfg.scope==="selected"?"請先勾選頁面":"尚無頁面",true); return; }
+    busy(true);
+    try{ const ref=refSizeOf(list); const bytes=await buildCompressed(cfg,list); await loadImposed(bytes,"壓縮結果"); closeCmpModal(); reportCmp(ref,bytes.length); }
+    catch(e){ console.error(e); toast("壓縮失敗："+(e.message||"未知錯誤"),true); } finally{ busy(false); }
   }
 
   // ---------- events ----------
@@ -1062,6 +1139,10 @@
   $("btnNup").onclick=openNupModal;
   $("nupClose").onclick=closeNupModal;
   $("nuDownload").onclick=nupDownload; $("nuLoad").onclick=nupLoad;
+  $("btnCmp").onclick=openCmpModal; $("cmpClose").onclick=closeCmpModal;
+  $("cmpDownload").onclick=cmpDownload; $("cmpLoad").onclick=cmpLoad;
+  $("cmpModal").addEventListener("click",e=>{ if(e.target===$("cmpModal")) closeCmpModal(); });
+  ["cmpDpi","cmpQ","cmpGray","cmpScope"].forEach(id=>$(id).addEventListener("change",updateCmpDesc));
   $("nupModal").addEventListener("click",e=>{ if(e.target===$("nupModal")) closeNupModal(); });
   ["nuCount","nuSheet","nuOrient","nuGap","nuMargin","nuDpi","nuScope"].forEach(id=>$(id).addEventListener("change",updateNupDesc));
   $("pnClose").onclick=closePnModal; $("pnApply").onclick=applyPn; $("pnRemove").onclick=removePn;
@@ -1093,6 +1174,7 @@
     if(openMenu.classList.contains("show")){ if(e.key==="Escape")hideOpenMenu(); }
     if(els.pnModal.classList.contains("show")){ if(e.key==="Escape")closePnModal(); return; }
     if($("nupModal").classList.contains("show")){ if(e.key==="Escape")closeNupModal(); return; }
+    if($("cmpModal").classList.contains("show")){ if(e.key==="Escape")closeCmpModal(); return; }
     if(e.key==="ArrowDown"||e.key==="ArrowRight"){e.preventDefault();stepPage(1);}
     else if(e.key==="ArrowUp"||e.key==="ArrowLeft"){e.preventDefault();stepPage(-1);}
     else if((e.key==="Delete"||e.key==="Backspace")&&currentUid&&tool==="none"){e.preventDefault();deletePages(targets());}
