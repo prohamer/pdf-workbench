@@ -3,6 +3,8 @@
 純前端、單頁的 PDF 編輯工具。所有處理都在瀏覽器本機完成，**檔案不會上傳到任何伺服器**。
 本版本已將相依函式庫一併打包在 `vendor/`，可完全離線使用，不依賴外部 CDN。
 
+> 中文／日韓文（CJK）顯示所需的字元對應表與標準字型資料也已打包在 `vendor/cmaps/` 與 `vendor/standard_fonts/`，因此含 CJK 的 PDF 可正常顯示，且離線亦然。
+
 ## 功能
 
 - 開啟 / 合併多個 PDF（一次選多檔即依序合併）
@@ -44,7 +46,7 @@
 
 `vendor/` 內的檔案取自對應版本的 npm 套件：
 
-- `pdfjs-dist@3.11.174` → `build/pdf.min.js`、`build/pdf.worker.min.js`
+- `pdfjs-dist@3.11.174` → `build/pdf.min.js`、`build/pdf.worker.min.js`、`cmaps/`、`standard_fonts/`
 - `pdf-lib@1.17.1` → `dist/pdf-lib.min.js`
 
 若要升級，取得新版對應檔案替換即可（升級 PDF.js 時 `pdf.min.js` 與 `pdf.worker.min.js` 版本需一致）。
